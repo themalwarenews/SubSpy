@@ -26,8 +26,8 @@ export PATH=$PATH:~/go/bin
 ## 🚀 Installation
 
 ```bash
-git clone <your-repo-url>
-cd subspy
+git clone https://github.com/themalwarenews/SubSpy/
+cd SubSpy
 chmod +x subspy.sh
 ```
 
