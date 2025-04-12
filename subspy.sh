@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Set proper environment for Go-based tools
+export PATH="/home/bloxer/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+LOG_FILE="/home/bloxer/.subspy-debug.log"
+echo "[INFO] SubSpy started by $(whoami) at $(date)" >> "$LOG_FILE"
+
 cd "$(dirname "$0")"
 
 if [[ ! -f "domains.txt" ]]; then
@@ -7,13 +13,15 @@ if [[ ! -f "domains.txt" ]]; then
     exit 1
 fi
 
-if [[ -z "$DISCORD_WEBHOOK" ]]; then
-    echo "Please set your Discord webhook URL as an environment variable:"
-    echo "export DISCORD_WEBHOOK='your_webhook_url'"
-    exit 1
+WEBHOOK_FILE=".discord_webhook"
+
+if [[ ! -f "$WEBHOOK_FILE" ]]; then
+    read -rp "Enter your Discord webhook URL: " user_webhook
+    echo "$user_webhook" > "$WEBHOOK_FILE"
 fi
 
-# Discord notification function
+DISCORD_WEBHOOK=$(cat "$WEBHOOK_FILE")
+
 notify_discord() {
     local message="$1"
     curl -s -H "Content-Type: application/json" \
@@ -22,7 +30,6 @@ notify_discord() {
          "$DISCORD_WEBHOOK" >/dev/null
 }
 
-# Test webhook on first run only
 if [[ ! -f ".webhook_verified" ]]; then
     notify_discord "✅ **Webhook configured successfully!** _(Webhook verification)_"
     touch ".webhook_verified"
@@ -35,39 +42,53 @@ while IFS= read -r domain || [[ -n "$domain" ]]; do
 
     notify_discord "🟡 **Scanning:** \`$domain\`"
 
-    today_list="${domain}-list.txt"
-    backup_list="${domain}-list.txt.bak"
-    json_file="${domain}.json"
-    diff_file="${domain}-diff.txt"
+    output_dir="subspy_results"
+    mkdir -p "$output_dir"
+
+    today_list="$output_dir/${domain}-list.txt"
+    backup_list="$output_dir/${domain}-list.txt.bak"
+    diff_file="$output_dir/${domain}-diff.txt"
 
     if [ ! -e "$today_list" ]; then
-        subfinder -d "$domain" -silent -o "$json_file" -oJ >/dev/null
-        jq '.host' "$json_file" -r | sort -u > "$today_list"
-
+        subfinder -d "$domain" -silent | sort -u > "$today_list"
         subdomain_count=$(wc -l < "$today_list")
         notify_discord "✅ **Initial scan completed for \`$domain\`: Found $subdomain_count subdomains.**"
-        continue
-    fi
-
-    cp "$today_list" "$backup_list"
-    > "$diff_file"
-
-    subfinder -d "$domain" -silent -o "$json_file" -oJ >/dev/null
-    jq '.host' "$json_file" -r | sort -u > "$today_list"
-
-    anew -d "$backup_list" < "$today_list" > "$diff_file"
-
-    new_count=$(wc -l < "$diff_file")
-
-    if [[ "$new_count" -gt 0 ]]; then
-        domains_found=$(sed ':a;N;$!ba;s/\n/\\n/g' "$diff_file")
-        notify_discord "🚨 **New subdomains detected for \`$domain\` ($new_count):**\n\`\`\`\n${domains_found}\n\`\`\`"
     else
-        notify_discord "✅ **No new subdomains found for \`$domain\`.**"
+        cp "$today_list" "$backup_list"
+        subfinder -d "$domain" -silent | sort -u > "$today_list"
+
+        comm -13 "$backup_list" "$today_list" > "$diff_file"
+
+        new_count=$(wc -l < "$diff_file")
+
+        if [[ "$new_count" -gt 0 ]]; then
+            domains_found=$(sed ':a;N;$!ba;s/\n/\\n/g' "$diff_file")
+            notify_discord "🚨 **New subdomains detected for \`$domain\` ($new_count):**\n\`\`\`\n${domains_found}\n\`\`\`"
+        else
+            notify_discord "✅ **No new subdomains found for \`$domain\`.**"
+        fi
+
+        rm -f "$backup_list" "$diff_file"
     fi
 
-    rm -f "$backup_list" "$diff_file"
+    nuclei_output="$output_dir/${domain}-takeover.jsonl"
+    nuclei -silent -t http/takeovers/ -jsonl -l "$today_list" -o "$nuclei_output" >/dev/null 2>&1
+
+    if [ -s "$nuclei_output" ]; then
+        jq -c '.' "$nuclei_output" | while IFS= read -r takeover; do
+            subdomain=$(echo "$takeover" | jq -r '.host // empty')
+            vulnerability=$(echo "$takeover" | jq -r '.info.name // "Unknown vulnerability"')
+
+            if [[ -n "$subdomain" && -n "$vulnerability" ]]; then
+                notify_discord "🔥 **Takeover detected!**\n**Subdomain:** \`$subdomain\`\n**Vulnerability:** $vulnerability"
+            fi
+        done
+    else
+        notify_discord "✅ **No subdomain takeover vulnerabilities found for \`$domain\`.**"
+    fi
 
 done < "domains.txt"
 
 notify_discord "🏁 **Subdomain Monitoring Scan Completed for all domains!**"
+
+echo "[INFO] SubSpy completed at $(date)" >> "$LOG_FILE"
