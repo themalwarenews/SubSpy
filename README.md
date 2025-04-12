@@ -1,19 +1,19 @@
 # 🕵️‍♂️ SubSpy – Automated Subdomain Monitoring
 
-A bash script to automatically discover and monitor subdomains for multiple domains daily. It sends notifications directly to your Discord channel whenever new subdomains are identified.
+A bash script to automatically discover and monitor subdomains for multiple domains. It sends notifications directly to your Discord channel whenever new subdomains or subdomain takeover vulnerabilities are identified.
 
 ## ⚙️ Requirements
 
 - [subfinder](https://github.com/projectdiscovery/subfinder)
 - [jq](https://stedolan.github.io/jq/download/)
-- [anew](https://github.com/tomnomnom/anew)
+- [nuclei](https://github.com/projectdiscovery/nuclei)
 - `curl` (pre-installed in most Linux distros)
 
 Install quickly with Go:
 
 ```bash
 go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-go install github.com/tomnomnom/anew@latest
+go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 sudo apt install jq
 ```
 
@@ -50,13 +50,9 @@ testsite.com
   - Go to `Channel Settings` → `Integrations` → `Webhooks`
   - Click `New Webhook`, give it a name, and copy the URL.
 
-- Set your Discord webhook URL as an environment variable:
+- On the first run, the script will prompt you to enter your Discord webhook URL, which is then stored for future runs.
 
-```bash
-export DISCORD_WEBHOOK="your_discord_webhook_url_here"
-```
-
-**Verify Webhook**:
+**Webhook Verification**:
 
 - The first time you run the script, it sends a test notification automatically.
 
@@ -84,9 +80,10 @@ Add this line:
 
 ## 📌 How it Works
 
-- Performs daily subdomain enumeration.
-- Compares the results against the previous run.
-- Immediately sends new findings to your Discord channel.
+- Performs regular subdomain enumeration using subfinder.
+- Detects subdomain takeover vulnerabilities using nuclei.
+- Compares the results against the previous scan.
+- Immediately sends new findings and vulnerability alerts to your Discord channel.
 - Provides clear updates about each scan.
 
 ## 🖥️ Example Discord Notifications
@@ -103,19 +100,19 @@ Add this line:
 🔄 Subdomain Monitoring Scan Started!
 ```
 
-- **Scanning domain:**
+- **Scanning Domain:**
 
 ```
 🟡 Scanning: example.com
 ```
 
-- **Initial scan completed:**
+- **Initial Scan Completed:**
 
 ```
 ✅ Initial scan completed for example.com: Found 42 subdomains.
 ```
 
-- **New subdomains discovered:**
+- **New Subdomains Discovered:**
 
 ```
 🚨 New subdomains detected for example.com (2):
@@ -124,7 +121,15 @@ domain1.example.com
 domain2.example.com
 ```
 
-- **No new subdomains:**
+- **Subdomain Takeover Detected:**
+
+```
+🔥 Takeover detected!
+Subdomain: vulnerable.example.com
+Vulnerability: AWS Bucket Takeover
+```
+
+- **No New Subdomains:**
 
 ```
 ✅ No new subdomains found for example.com.
