@@ -1,0 +1,22 @@
+#!/bin/bash
+# SubSpy Configuration File
+
+# Path to your Go binaries (e.g., subfinder, nuclei)
+# Default: ~/go/bin
+# GOPATH_BIN=""
+
+# Log file path
+# Default: subspy.log (in the script's directory)
+# LOG_FILE=""
+
+# Custom flags for subfinder
+# Example: "-recursive -all"
+# SUBFINDER_FLAGS=""
+
+# Custom flags for nuclei
+# Example: "-severity critical,high -retries 3"
+# NUCLEI_FLAGS=""
+
+# Run Nuclei scan only on newly discovered subdomains (true/false)
+# Default: false
+# NUCLEI_SCAN_NEW_ONLY="false"
